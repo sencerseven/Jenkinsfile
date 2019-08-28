@@ -1,0 +1,97 @@
+try{
+    
+    node('localmachine'){
+    def mvnHome = tool name: 'maven', type: 'maven'
+    def mvnCMD = "${mvnHome}/bin/mvn"
+        
+    stage('SCM Checkout'){
+        notifyBuild('STARTED')
+        sh "rm -f .git/config.lock"
+        sh "echo ${user_name}"
+        
+        git branch: 'development', credentialsId: 'git-creds', url: 'https://github.com/sencerseven/basittarifler.git'
+        
+        withCredentials([
+        string(credentialsId: 'aws.access_key_id', variable: 'ACCESS_KEY_ID'),
+        string(credentialsId: 'aws.secret_access_key', variable: 'ACCESS_KEY')
+        ]){
+            sh "sed 's/ACCESS_KEY_ID/\\$ACCESS_KEY_ID/g' ./src/main/resources/application.properties"
+            sh "sed 's/SECRET_ACCESS_KEY/\\$ACCESS_KEY/g' ./src/main/resources/application.properties"
+        }
+   
+        
+        
+    }
+    stage ('Mvn Clean'){
+        sh "${mvnCMD} clean"
+        //sh "${mvnCMD} install -DskipTests"
+
+    }
+    
+      stage ('Test Case & Maven Install'){
+        sh "${mvnCMD} install"
+    }
+    
+   
+    stage ('Docker Build image '){
+          sh "pwd"
+          sh "sudo docker stop \$(docker container ls -a -fname=basittarifler -q)"
+          try{
+              sh "sudo docker rmi -f \$(docker images  | grep basittarifler)"; 
+          }catch(ex){
+              
+          }
+         
+          try{
+             sh "sudo docker build -t docker-spring-boot-basittarifler ." 
+          }catch(ex){
+              
+          }
+          
+    }
+    
+    stage ('Docker Container Up'){
+            sh 'docker ps -f name=basittarifler -q | xargs --no-run-if-empty docker container stop'
+            sh 'docker container ls -a -fname=basittarifler -q | xargs -r docker container rm'
+            sh "sudo docker run -d --name=basittarifler  -p 80:8080 docker-spring-boot-basittarifler"
+         sh "rm -f .git/config.lock"
+    }
+    
+    stage('Slack Messages'){
+        notifyBuild('SUCCESSFUL')
+    }
+    
+}
+    
+}catch(e){
+    notifyBuild('FAILED')
+    throw e
+}
+
+
+def notifyBuild(String buildStatus = 'STARTED') {
+  // build status of null means successful
+  buildStatus =  buildStatus ?: 'SUCCESSFUL'
+
+  // Default values
+  def colorName = 'RED'
+  def colorCode = '#FF0000'
+  def subject = "*${buildStatus}* | ${env.BUILD_TIMESTAMP} \n*Request Owner* : ${user_name} \n*Job*: ${env.JOB_NAME} \n*Deployment*: [${env.BUILD_NUMBER}]"
+  def summary = "${subject} \n(${env.BUILD_URL})"
+
+  // Override default values based on build status
+  if (buildStatus == 'STARTED') {
+    color = 'warning'
+    colorCode = '#FFFF00'
+  } else if (buildStatus == 'SUCCESSFUL') {
+    color = 'good'
+    colorCode = '#00FF00'
+  } else {
+    color = 'danger'
+    colorCode = '#FF0000'
+  }
+
+  // Send notifications
+  slackSend baseUrl: 'https://basittarifler.slack.com/services/hooks/jenkins-ci/', channel: '#basittarifler-dev', color: color, iconEmoji: '', message: summary, teamDomain: 'https://basittarifler.slack.com', tokenCredentialId: 'basittarifler-dev-j', username: 'info@Jenkins'
+
+}
