@@ -1,6 +1,6 @@
 try{
     
-    node('localmachine'){
+    node(){
     def mvnHome = tool name: 'maven', type: 'maven'
     def mvnCMD = "${mvnHome}/bin/mvn"
         
