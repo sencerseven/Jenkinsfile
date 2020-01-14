@@ -53,7 +53,7 @@ try{
     stage ('Docker Container Up'){
             sh 'docker ps -f name=basittarifler -q | xargs --no-run-if-empty docker container stop'
             sh 'docker container ls -a -fname=basittarifler -q | xargs -r docker container rm'
-            sh "sudo docker run -d --name=basittarifler  -p 80:8080 docker-spring-boot-basittarifler"
+            sh "sudo docker run -d --name=basittarifler  -p 8081:8080 docker-spring-boot-basittarifler"
          sh "rm -f .git/config.lock"
     }
     
